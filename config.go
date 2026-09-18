@@ -45,9 +45,11 @@ type Config struct {
 	// Long lines are resized to this width, distorting the aspect ratio.
 	MaxWidth int
 
-	// RGB controls the channel order fed to the model. PP-OCRv6 was trained
-	// and exported in RGB order.
-	RGB bool
+	// BGR feeds the model channels in BGR order. The default (false) is RGB,
+	// which is the order PP-OCRv6 was trained and exported in (the PaddleX
+	// inference pipeline reads images with ReadImage(format="RGB")). Set it
+	// only when the input images are already BGR-ordered.
+	BGR bool
 
 	// Mean and Std are the per-channel normalization parameters applied as
 	// (pixel*Scale - Mean) / Std.

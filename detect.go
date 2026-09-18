@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"regexp"
+	"sync"
 
 	"github.com/amikos-tech/pure-onnx/ort"
 
@@ -68,6 +69,9 @@ type Detector struct {
 	meta    *onnxmeta.Model
 	inName  string
 	outName string
+
+	shapeMu sync.Mutex
+	outSize map[[2]int][2]int // (resized w, h) -> probed output (h, w)
 }
 
 // Detection preprocessing constants (PaddleOCR det pipeline): ImageNet
@@ -114,6 +118,7 @@ func NewDetector(cfg DetConfig) (*Detector, error) {
 	return &Detector{
 		cfg: cfg, sess: sess, meta: meta,
 		inName: inName, outName: outName,
+		outSize: make(map[[2]int][2]int),
 	}, nil
 }
 
@@ -159,7 +164,7 @@ func (d *Detector) Detect(img image.Image) ([]Box, error) {
 
 	// The detection output shape is dynamic ([1, 1, h', w']); probe for the
 	// exact dims once per input size, as ONNX Runtime requires an exact match.
-	outH, outW, err := d.probeOutputSize(inTensor, rw, rh)
+	outH, outW, err := d.outputSize(inTensor, rw, rh)
 	if err != nil {
 		return nil, err
 	}
@@ -176,29 +181,13 @@ func (d *Detector) Detect(img image.Image) ([]Box, error) {
 	probMap := outTensor.GetData()
 	boxes := extractBoxes(probMap, outH, outW, d.cfg.Threshold, d.cfg.MinBoxArea)
 
-	// Scale boxes back to original image space (rxScale is original pixels
-	// per resized pixel), then unclip (expand) them to compensate the DB
-	// model's shrink ratio.
+	// Unclip (DB shrink compensation) in resized space, then map the boxes
+	// back to original image coordinates.
 	for i := range boxes {
 		boxes[i] = unclipBox(boxes[i], d.cfg.UnclipRatio)
-		boxes[i].MinX = int(float64(boxes[i].MinX)*rxScale + 0.5)
-		boxes[i].MinY = int(float64(boxes[i].MinY)*ryScale + 0.5)
-		boxes[i].MaxX = int(float64(boxes[i].MaxX)*rxScale + 0.5)
-		boxes[i].MaxY = int(float64(boxes[i].MaxY)*ryScale + 0.5)
-		// clamp to original bounds
-		if boxes[i].MinX < 0 {
-			boxes[i].MinX = 0
-		}
-		if boxes[i].MinY < 0 {
-			boxes[i].MinY = 0
-		}
-		if boxes[i].MaxX > srcW {
-			boxes[i].MaxX = srcW
-		}
-		if boxes[i].MaxY > srcH {
-			boxes[i].MaxY = srcH
-		}
 	}
+	scaleBoxesToOriginal(boxes, rxScale, ryScale, srcW, srcH)
+
 	return boxes, nil
 }
 
@@ -235,6 +224,43 @@ func normalizeDet(rgba *image.RGBA, w, h int) []float32 {
 }
 
 var detShapeRe = regexp.MustCompile(`Requested shape:\{[^,]+,\s*[^,]+,\s*(\d+),\s*(\d+)\}`)
+
+// outputSize returns the detection output dims for a resized input size,
+// probing the model once per distinct (w, h) and caching the result.
+func (d *Detector) outputSize(in *ort.Tensor[float32], rw, rh int) (int, int, error) {
+	key := [2]int{rw, rh}
+	d.shapeMu.Lock()
+	cached, ok := d.outSize[key]
+	d.shapeMu.Unlock()
+	if ok {
+		return cached[0], cached[1], nil
+	}
+	h, w, err := d.probeOutputSize(in, rw, rh)
+	if err != nil {
+		return 0, 0, err
+	}
+	d.shapeMu.Lock()
+	d.outSize[key] = [2]int{h, w}
+	d.shapeMu.Unlock()
+	return h, w, nil
+}
+
+// scaleBoxesToOriginal maps boxes from the resized (and padded) detection
+// space back to original image coordinates and clamps them to the image
+// bounds. sx and sy are original pixels per resized pixel, so they are
+// multiplied in, never divided.
+func scaleBoxesToOriginal(boxes []Box, sx, sy float64, srcW, srcH int) {
+	for i := range boxes {
+		boxes[i].MinX = int(float64(boxes[i].MinX)*sx + 0.5)
+		boxes[i].MinY = int(float64(boxes[i].MinY)*sy + 0.5)
+		boxes[i].MaxX = int(float64(boxes[i].MaxX)*sx + 0.5)
+		boxes[i].MaxY = int(float64(boxes[i].MaxY)*sy + 0.5)
+		boxes[i].MinX = max(boxes[i].MinX, 0)
+		boxes[i].MinY = max(boxes[i].MinY, 0)
+		boxes[i].MaxX = min(boxes[i].MaxX, srcW)
+		boxes[i].MaxY = min(boxes[i].MaxY, srcH)
+	}
+}
 
 // probeOutputSize discovers the detection model's output spatial dims.
 //

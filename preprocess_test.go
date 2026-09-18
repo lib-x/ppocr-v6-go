@@ -9,7 +9,7 @@ import (
 
 func TestPreprocessNormalization(t *testing.T) {
 	// A 2x2 image: all-white pixels. After (255/255 - 0.5)/0.5 = 1.0
-	// every channel of every pixel must be exactly 1.0 in RGB order.
+	// every channel of every pixel must be exactly 1.0.
 	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
 	for i := range 2 * 2 {
 		img.Pix[i*4] = 255
@@ -17,7 +17,7 @@ func TestPreprocessNormalization(t *testing.T) {
 		img.Pix[i*4+2] = 255
 		img.Pix[i*4+3] = 255
 	}
-	cfg := &Config{Height: 48, RGB: true}
+	cfg := &Config{Height: 48}
 	cfg.normalize()
 
 	data, w, err := Preprocess(img, cfg)
@@ -39,10 +39,11 @@ func TestPreprocessNormalization(t *testing.T) {
 
 func TestPreprocessBlackAndChannelOrder(t *testing.T) {
 	// Black pixel: (0 - 0.5)/0.5 = -1.0. A pure-red pixel must put 1.0 in
-	// channel 0 (R) with RGB order and in channel 2 (B position) with BGR.
+	// channel 0 (R) with the default RGB order and in channel 2 (B position)
+	// with BGR.
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	img.SetRGBA(0, 0, color.RGBA{R: 255, G: 0, B: 0, A: 255})
-	cfg := &Config{Height: 48, RGB: true}
+	cfg := &Config{Height: 48}
 	cfg.normalize()
 	data, _, err := Preprocess(img, cfg)
 	if err != nil {
@@ -59,7 +60,7 @@ func TestPreprocessBlackAndChannelOrder(t *testing.T) {
 		t.Errorf("B channel = %v, want -1.0", data[2*48*48])
 	}
 
-	cfg.RGB = false
+	cfg.BGR = true
 	data, _, err = Preprocess(img, cfg)
 	if err != nil {
 		t.Fatalf("Preprocess BGR: %v", err)

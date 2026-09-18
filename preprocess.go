@@ -45,23 +45,23 @@ func Preprocess(img image.Image, cfg *Config) ([]float32, int, error) {
 			px := row[x]
 			for c := 0; c < 3; c++ {
 				var ch uint8
-				if cfg.RGB {
+				if cfg.BGR {
 					switch c {
 					case 0:
-						ch = px.R
+						ch = px.B
 					case 1:
 						ch = px.G
 					default:
-						ch = px.B
+						ch = px.R
 					}
 				} else {
 					switch c {
 					case 0:
-						ch = px.B
+						ch = px.R
 					case 1:
 						ch = px.G
 					default:
-						ch = px.R
+						ch = px.B
 					}
 				}
 				out[c*h*w+y*w+x] = (float32(ch)*scale - mean) / std
@@ -171,10 +171,10 @@ func NormalizeAlreadyResized(rgba *image.RGBA, w, h int, cfg *Config) []float32 
 			i := y*rgba.Stride + x*4
 			for c := 0; c < 3; c++ {
 				var ch uint8
-				if cfg.RGB {
-					ch = rgba.Pix[i+c]
-				} else {
+				if cfg.BGR {
 					ch = rgba.Pix[i+2-c]
+				} else {
+					ch = rgba.Pix[i+c]
 				}
 				out[c*h*w+y*w+x] = (float32(ch)*scale - mean) / std
 			}
