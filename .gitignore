@@ -1,0 +1,11 @@
+# Model files are not committed (62MB + 21MB). Download instructions:
+#   rec: https://www.modelscope.cn/models/PaddlePaddle/PP-OCRv6_small_rec_onnx
+#   det: https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx
+# Tests that need them skip automatically when the files are absent.
+/testdata/inference.onnx
+/testdata/det-v6.onnx
+/testdata/det.onnx
+
+# Scratch images from development.
+/testdata/test.png
+/testdata/test2.png
