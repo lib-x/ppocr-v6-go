@@ -30,6 +30,13 @@ type DetConfig struct {
 	// shrink ratio (default 1.5). The offset follows the DB formula
 	// d = area * ratio / perimeter.
 	UnclipRatio float32
+	// BoxThresh drops boxes whose mean probability inside the box is below
+	// this value (0 disables the filter; the reference pipeline uses 0.6).
+	BoxThresh float32
+	// MinBoxSide drops boxes whose shorter side is below this many pixels in
+	// the resized detection space (0 disables the filter; the reference
+	// pipeline uses 3, plus 5 after unclip).
+	MinBoxSide int
 }
 
 // normalize fills defaults.
@@ -48,6 +55,12 @@ func (c *DetConfig) normalize() error {
 	}
 	if c.UnclipRatio <= 0 {
 		c.UnclipRatio = 1.5
+	}
+	if c.BoxThresh == 0 {
+		c.BoxThresh = 0.6 // PaddleX inference default; 0 disables the filter
+	}
+	if c.MinBoxSide == 0 {
+		c.MinBoxSide = 3 // PaddleX inference default; 0 disables the filter
 	}
 	return nil
 }
@@ -180,6 +193,9 @@ func (d *Detector) Detect(img image.Image) ([]Box, error) {
 
 	probMap := outTensor.GetData()
 	boxes := extractBoxes(probMap, outH, outW, d.cfg.Threshold, d.cfg.MinBoxArea)
+	if d.cfg.MinBoxSide > 0 || d.cfg.BoxThresh > 0 {
+		boxes = filterBoxes(probMap, outW, boxes, d.cfg.MinBoxSide, d.cfg.BoxThresh)
+	}
 
 	// Unclip (DB shrink compensation) in resized space, then map the boxes
 	// back to original image coordinates.
@@ -243,6 +259,35 @@ func (d *Detector) outputSize(in *ort.Tensor[float32], rw, rh int) (int, int, er
 	d.outSize[key] = [2]int{h, w}
 	d.shapeMu.Unlock()
 	return h, w, nil
+}
+
+// filterBoxes applies the reference pipeline's box-level filters: a minimum
+// shorter side and a minimum mean probability inside the box. Both are
+// evaluated in the resized detection space, before unclip and before mapping
+// back to the original image.
+func filterBoxes(prob []float32, w int, boxes []Box, minSide int, boxThresh float32) []Box {
+	out := boxes[:0]
+	for _, b := range boxes {
+		if minSide > 0 && min(b.Width(), b.Height()) < minSide {
+			continue
+		}
+		if boxThresh > 0 {
+			var sum float32
+			var n int
+			for y := b.MinY; y < b.MaxY; y++ {
+				row := y * w
+				for x := b.MinX; x < b.MaxX; x++ {
+					sum += prob[row+x]
+					n++
+				}
+			}
+			if n == 0 || sum/float32(n) < boxThresh {
+				continue
+			}
+		}
+		out = append(out, b)
+	}
+	return out
 }
 
 // scaleBoxesToOriginal maps boxes from the resized (and padded) detection

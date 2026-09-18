@@ -167,3 +167,33 @@ func extractBoxesFromBinary(bin []uint8, h, w int, minArea int) []Box {
 	}
 	return extractBoxes(prob, h, w, 0.5, minArea)
 }
+
+func TestFilterBoxes(t *testing.T) {
+	const w, h = 20, 10
+	prob := make([]float32, w*h)
+	// A high-confidence box and a low-confidence one of the same size.
+	for y := 1; y < 4; y++ {
+		for x := 1; x < 6; x++ {
+			prob[y*w+x] = 0.9
+		}
+		for x := 10; x < 15; x++ {
+			prob[y*w+x] = 0.2
+		}
+	}
+	boxes := []Box{
+		{MinX: 1, MinY: 1, MaxX: 6, MaxY: 4},
+		{MinX: 10, MinY: 1, MaxX: 15, MaxY: 4},
+		{MinX: 18, MinY: 8, MaxX: 19, MaxY: 9}, // 1x1, too small
+	}
+	got := filterBoxes(prob, w, boxes, 3, 0.6)
+	if len(got) != 1 {
+		t.Fatalf("filtered = %d boxes, want 1 (%+v)", len(got), got)
+	}
+	if got[0].MinX != 1 {
+		t.Errorf("kept box %+v, want the high-confidence one", got[0])
+	}
+	// Disabling both filters keeps everything.
+	if n := len(filterBoxes(prob, w, boxes, 0, 0)); n != 3 {
+		t.Errorf("disabled filters returned %d boxes, want 3", n)
+	}
+}
