@@ -292,16 +292,24 @@ func ccl(bin []uint8, w, h int) ([]int32, int) {
 		}
 	}
 
-	// Flatten: reassign each label to its root.
-	count := 0
+	// Flatten and compact: reassign each label to its root, then renumber the
+	// roots to 1..k. Returning the largest root instead would leave gaps
+	// (labels that were merged away), and extractBoxes would turn each gap
+	// into a phantom component with an inverted bounding box.
+	remap := make(map[int32]int32)
+	var k int32
 	for i, l := range labels {
-		if l > 0 {
-			r := find(l)
-			labels[i] = r
-			if r > int32(count) {
-				count = int(r)
-			}
+		if l == 0 {
+			continue
 		}
+		r := find(l)
+		id, ok := remap[r]
+		if !ok {
+			k++
+			id = k
+			remap[r] = id
+		}
+		labels[i] = id
 	}
-	return labels, count
+	return labels, int(k)
 }

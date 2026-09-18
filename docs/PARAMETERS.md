@@ -86,3 +86,11 @@ PP-OCRv6 的 ONNX 导出**末端包含 Softmax 节点**（计算图里能看到 
 - 检测侧的张量名从图里自动读取；识别侧的张量名和高度有模型对应的默认值（`Config.InputName` / `OutputName` / `Height` 可覆盖），类别数从图里读出来用于校验字典。
 - 框架决定的常量（识别均值/标准差、检测阈值、unclip 比例）暴露为可覆盖字段，默认值写在字段注释里；检测的归一化均值/标准差和 `box_thresh` 目前是固定值，没有导出成配置项。
 - 全部参数都有测试覆盖：归一化数值有精确断言（`preprocess_test.go`），解码映射有构造用例（`decode_test.go`），端到端有 golden 测试（`rec_test.go`、`pipeline_test.go`）。
+
+## 8. 示意图怎么重新生成
+
+`docs/det-overlay.png`（检测框叠加）和 `docs/det-probmap.png`（原始概率图）由 `det_figures_test.go` 生成，默认跳过，需要时显式开启：
+
+```bash
+PPOCR_UPDATE_FIGURES=1 ONNXRUNTIME_LIB_PATH=/path/to/libonnxruntime.so go test -run TestGenerateDocsFigures .
+```

@@ -119,3 +119,51 @@ func TestMergeLineBoxesJoinsNeighbours(t *testing.T) {
 		t.Errorf("merged box = %+v, want %+v", merged[0], want)
 	}
 }
+
+func TestCCLCompactsLabels(t *testing.T) {
+	// Three separate blobs: every returned label must have pixels, and the
+	// component count must equal the number of blobs. Returning the largest
+	// root label left gaps that extractBoxes turned into inverted boxes.
+	const w, h = 20, 6
+	bin := make([]uint8, w*h)
+	for _, p := range [][2]int{{1, 1}, {5, 1}, {10, 3}} {
+		bin[p[1]*w+p[0]] = 1
+	}
+	labels, n := ccl(bin, w, h)
+	if n != 3 {
+		t.Fatalf("components = %d, want 3", n)
+	}
+	seen := map[int32]int{}
+	for _, l := range labels {
+		if l > 0 {
+			seen[l]++
+		}
+	}
+	if len(seen) != 3 {
+		t.Fatalf("distinct labels = %d, want 3 (%v)", len(seen), seen)
+	}
+	for l := int32(1); l <= int32(n); l++ {
+		if seen[l] == 0 {
+			t.Errorf("label %d has no pixels", l)
+		}
+	}
+
+	boxes := extractBoxesFromBinary(bin, h, w, 0)
+	for _, b := range boxes {
+		if b.Width() <= 0 || b.Height() <= 0 {
+			t.Errorf("degenerate box %+v", b)
+		}
+	}
+}
+
+// extractBoxesFromBinary runs the component-to-box stage on a binary map
+// (threshold 0 so every set pixel counts).
+func extractBoxesFromBinary(bin []uint8, h, w int, minArea int) []Box {
+	prob := make([]float32, len(bin))
+	for i, v := range bin {
+		if v == 1 {
+			prob[i] = 1
+		}
+	}
+	return extractBoxes(prob, h, w, 0.5, minArea)
+}
