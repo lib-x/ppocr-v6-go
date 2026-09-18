@@ -21,17 +21,18 @@ type DetConfig struct {
 	// to a multiple of 32.
 	MaxSideLen int
 	// Threshold is the minimum probability for a pixel to be considered part
-	// of a text region (default 0.3).
+	// of a text region (default 0.2, from the model's bundled inference.yml).
 	Threshold float32
 	// MinBoxArea is the minimum pixel area of a detected text box (in the
 	// resized coordinate space) below which a box is discarded (default 10).
 	MinBoxArea int
 	// UnclipRatio expands each detected box to compensate the DB model's
-	// shrink ratio (default 1.5). The offset follows the DB formula
-	// d = area * ratio / perimeter.
+	// shrink ratio (default 1.4, from the model's bundled inference.yml). The
+	// offset follows the DB formula d = area * ratio / perimeter.
 	UnclipRatio float32
 	// BoxThresh drops boxes whose mean probability inside the box is below
-	// this value (0 disables the filter; the reference pipeline uses 0.6).
+	// this value (default 0.45, from the model's bundled inference.yml; 0
+	// disables the filter).
 	BoxThresh float32
 	// MinBoxSide drops boxes whose shorter side is below this many pixels in
 	// the resized detection space (0 disables the filter; the reference
@@ -48,16 +49,16 @@ func (c *DetConfig) normalize() error {
 		c.MaxSideLen = 960
 	}
 	if c.Threshold <= 0 {
-		c.Threshold = 0.3
+		c.Threshold = 0.2
 	}
 	if c.MinBoxArea <= 0 {
 		c.MinBoxArea = 10
 	}
 	if c.UnclipRatio <= 0 {
-		c.UnclipRatio = 1.5
+		c.UnclipRatio = 1.4
 	}
 	if c.BoxThresh == 0 {
-		c.BoxThresh = 0.6 // PaddleX inference default; 0 disables the filter
+		c.BoxThresh = 0.45 // model inference.yml; 0 disables the filter
 	}
 	if c.MinBoxSide == 0 {
 		c.MinBoxSide = 3 // PaddleX inference default; 0 disables the filter

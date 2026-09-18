@@ -39,8 +39,8 @@ func TestPreprocessNormalization(t *testing.T) {
 
 func TestPreprocessBlackAndChannelOrder(t *testing.T) {
 	// Black pixel: (0 - 0.5)/0.5 = -1.0. A pure-red pixel must put 1.0 in
-	// channel 0 (R) with the default RGB order and in channel 2 (B position)
-	// with BGR.
+	// channel 2 (B position) with the default BGR order and in channel 0 (R)
+	// with RGB.
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	img.SetRGBA(0, 0, color.RGBA{R: 255, G: 0, B: 0, A: 255})
 	cfg := &Config{Height: 48}
@@ -50,24 +50,24 @@ func TestPreprocessBlackAndChannelOrder(t *testing.T) {
 		t.Fatalf("Preprocess: %v", err)
 	}
 	// NCHW: channel c starts at c*h*w. Pixel (0,0) is at +0.
-	if math.Abs(float64(data[0])-1.0) > 1e-6 {
-		t.Errorf("R channel = %v, want 1.0", data[0])
+	if math.Abs(float64(data[2*48*48])-1.0) > 1e-6 {
+		t.Errorf("default (BGR) B slot = %v, want 1.0 (red pixel in B slot)", data[2*48*48])
 	}
 	if math.Abs(float64(data[48*48])+1.0) > 1e-6 {
 		t.Errorf("G channel = %v, want -1.0", data[48*48])
 	}
-	if math.Abs(float64(data[2*48*48])+1.0) > 1e-6 {
-		t.Errorf("B channel = %v, want -1.0", data[2*48*48])
+	if math.Abs(float64(data[0])+1.0) > 1e-6 {
+		t.Errorf("R channel = %v, want -1.0", data[0])
 	}
 
-	cfg.BGR = true
+	cfg.RGB = true
 	data, _, err = Preprocess(img, cfg)
 	if err != nil {
-		t.Fatalf("Preprocess BGR: %v", err)
+		t.Fatalf("Preprocess RGB: %v", err)
 	}
-	// BGR order: R value lands in the last channel.
-	if math.Abs(float64(data[2*48*48])-1.0) > 1e-6 {
-		t.Errorf("BGR: B channel = %v, want 1.0 (red pixel in B slot)", data[2*48*48])
+	// RGB order: R value lands in the first channel.
+	if math.Abs(float64(data[0])-1.0) > 1e-6 {
+		t.Errorf("RGB: R channel = %v, want 1.0", data[0])
 	}
 }
 

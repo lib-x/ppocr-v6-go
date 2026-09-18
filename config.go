@@ -45,11 +45,12 @@ type Config struct {
 	// Long lines are resized to this width, distorting the aspect ratio.
 	MaxWidth int
 
-	// BGR feeds the model channels in BGR order. The default (false) is RGB,
-	// which is the order PP-OCRv6 was trained and exported in (the PaddleX
-	// inference pipeline reads images with ReadImage(format="RGB")). Set it
-	// only when the input images are already BGR-ordered.
-	BGR bool
+	// RGB feeds the model channels in RGB order. The default (false) is BGR,
+	// which is what the PP-OCRv6 ONNX models expect: their bundled
+	// inference.yml sets DecodeImage.img_mode to BGR, and the PaddleX
+	// predictor builds its reader from that config (overriding the RGB default
+	// it starts with). Set RGB only if your input really is RGB-ordered.
+	RGB bool
 
 	// Mean and Std are the per-channel normalization parameters applied as
 	// (pixel*Scale - Mean) / Std.
